@@ -24,6 +24,7 @@ with selected_tab[0]:
     - **Database**: will aggregate the data entered using the template.
     - **Visualisation**: will provide visual representations of the collected data, such as charts and graphs
     - **Analysis**: tools and insights for analyzing the cost data, potentially including trend analysis or comparisons between different cost categories.
+    - **Aggregated**: will display the aggregated data for further analysis
     """)
 
 # Content for the second tab ("Residential Care Costs")
