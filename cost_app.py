@@ -1,6 +1,6 @@
 import pandas as pd
 import streamlit as st
-from cost import template_cost, simulate_service_costs
+from cost import template_cost, simulate_service_costs,aggregate_cost_data
 from cost_viz import main
 from analysis import run_analysis
 import numpy as np
@@ -9,7 +9,7 @@ import numpy as np
 st.title("Disability Care Cost Data - POC")
 
 # Create tabs
-tabs = ["Description", "Residential Care Costs", "Database", "Visualisation", "Analysis"]
+tabs = ["Description", "Residential Care Costs", "Database", "Visualisation", "Analysis", "Agrregated"]
 selected_tab = st.tabs(tabs)
 
 # Content for the first tab ("App Description")
@@ -60,3 +60,8 @@ with selected_tab[4]:
             st.write("Exponentiated Coefficients:")
             exponentiated_coeffs = np.exp(model_glm.params)
             st.write(exponentiated_coeffs) 
+with selected_tab[5]:
+    st.write("Aggregated Data")
+    agg = aggregate_cost_data(st.session_state.collated_df)
+    st.dataframe(agg.style.format({"Cost_Value": "{:.2f}"})) # Format Cost_Value
+    

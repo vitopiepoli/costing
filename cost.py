@@ -166,3 +166,40 @@ def simulate_service_costs(num_people=1000):
     # Create a pandas DataFrame
     return pd.DataFrame(records)
 
+## aggregate data
+
+df = pd.read_csv('test.csv')
+
+df.columns = ['Service', 'Person_ID', 'County', 'Disability_Complexity', 'Cost_Type',
+       'Cost_Description', 'Cost_Value', 'Service_Provider']
+
+
+def aggregate_cost_data(df):
+    """
+    Aggregates cost data by service, county, and disability complexity,
+    calculating sum, average, median, min, and max of cost value for each
+    unique person ID within those groups.
+
+    Args:
+        df: Pandas DataFrame with columns 'Service', 'Person_ID', 'County',
+           'Disability_Complexity', 'Cost_Value'.
+
+    Returns:
+        Pandas DataFrame with aggregated cost data.
+    """
+
+    # Group by service, county, disability complexity, and person ID
+    grouped = df.groupby(['Service', 'County', 'Disability_Complexity', 'Person_ID'])['Cost_Value'].sum().reset_index()
+
+    # Aggregate at the service, county, and disability complexity level
+    aggregated = grouped.groupby(['Service', 'County', 'Disability_Complexity'])['Cost_Value'].agg(
+        Total_Cost = 'sum',
+        Average_Cost = 'mean',
+        Median_Cost = 'median',
+        Min_Cost = 'min',
+        Max_Cost = 'max',
+        Unique_Person_Count = 'count'  # Count of unique person IDs
+    ).reset_index()
+
+    return aggregated
+
