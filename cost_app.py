@@ -5,6 +5,13 @@ from cost_viz import main
 from analysis import run_analysis
 import numpy as np
 
+st.set_page_config(
+    page_title="Disability Care Cost Data - POC",  # Optional page icon
+    layout="wide",       # Optional layout
+    initial_sidebar_state="expanded",  # Optional sidebar state 
+)
+
+
 # Streamlit app
 st.title("Disability Care Cost Data - POC")
 
