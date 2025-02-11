@@ -1,5 +1,7 @@
 import pandas as pd
 import numpy as np
+import streamlit as st
+import plotly.express as px
 
 # list of irish counties
 
@@ -168,10 +170,7 @@ def simulate_service_costs(num_people=1000):
 
 ## aggregate data
 
-df = pd.read_csv('test.csv')
 
-df.columns = ['Service', 'Person_ID', 'County', 'Disability_Complexity', 'Cost_Type',
-       'Cost_Description', 'Cost_Value', 'Service_Provider']
 
 
 def aggregate_cost_data(df):
@@ -201,5 +200,151 @@ def aggregate_cost_data(df):
         Unique_Person_Count = 'count'  # Count of unique person IDs
     ).reset_index()
 
-    return aggregated
+    return [aggregated,grouped]
+
+def tab5_content(df):
+    st.title("Cost Aggregation Analysis")
+
+    # --- Filters within Tab 5 ---
+    st.subheader("Data Filters")
+
+    # Create filter options for each relevant column
+    service_options = df['Service'].unique().tolist()
+    county_options = df['County'].unique().tolist()
+    disability_options = df['Disability_Complexity'].unique().tolist()
+
+    selected_services = st.multiselect("Select Services", service_options, default=service_options)
+    selected_counties = st.multiselect("Select Counties", county_options, default=county_options)
+    selected_disabilities = st.multiselect("Select Disability Complexities", disability_options, default=disability_options)
+
+    # Apply filters
+    filtered_df = df[
+        df['Service'].isin(selected_services) &
+        df['County'].isin(selected_counties) &
+        df['Disability_Complexity'].isin(selected_disabilities)
+    ]
+    
+    # plot the distribution of cost value using boxplot in plotly
+    toplot = aggregate_cost_data(filtered_df)[1]
+    toplot["Complexity_County"] = toplot["Disability_Complexity"] + " - " + toplot["County"]
+    fig = px.box(
+        toplot,
+        x="Service",
+        y="Cost_Value",
+        color="Complexity_County",
+        title="Cost Value Distribution by Service, Disability Complexity, and County",
+        width=1200,
+        height=600
+    )
+    st.plotly_chart(fig)
+
+    if not filtered_df.empty:  # Check if there are any records after filtering
+        aggregated_data = aggregate_cost_data(filtered_df)[0]
+
+        # --- Display Aggregated Data ---
+        st.subheader("Aggregated Cost Data")
+        st.dataframe(aggregated_data)  # Display as a table
+
+    if not df.empty:
+        # Initialize or retrieve aggregated data from session state
+        if 'aggregated_data' not in st.session_state:
+            st.session_state.aggregated_data = aggregate_cost_data(df)[0].copy()
+            st.session_state.aggregated_data['Estimated_Total_Cost'] = st.session_state.aggregated_data['Total_Cost']
+            st.session_state.aggregated_data['Estimated_Min_Cost'] = st.session_state.aggregated_data['Min_Cost']
+            st.session_state.aggregated_data['Estimated_Max_Cost'] = st.session_state.aggregated_data['Max_Cost']
+
+         # Get a *copy* to work with
+
+         # Create a copy to avoid modifying the original DataFrame
+
+        # --- Cost Estimation Section ---
+        st.subheader("Cost Estimation")
+
+        # Get unique combinations for dropdowns
+        county_options = df['County'].unique().tolist()
+        service_options = df['Service'].unique().tolist()
+        complexity_options = df['Disability_Complexity'].unique().tolist()
+
+        # Initialize new columns with original values
+        aggregated_data['Estimated_Total_Cost'] = aggregated_data['Total_Cost']
+        aggregated_data['Estimated_Min_Cost'] = aggregated_data['Min_Cost']
+        aggregated_data['Estimated_Max_Cost'] = aggregated_data['Max_Cost']
+
+        # Create a dictionary to store changes:
+        changes = {}
+
+        # Use st.form to group the input elements
+        with st.form("cost_estimation_form"):
+
+            selected_county = st.selectbox("Select County", county_options)
+            selected_service = st.selectbox("Select Service", service_options)
+            selected_complexity = st.selectbox("Select Disability Complexity", complexity_options)
+
+            # Filter aggregated data for the selected combination
+            subset = aggregated_data[
+                (aggregated_data['County'] == selected_county) &
+                (aggregated_data['Service'] == selected_service) &
+                (aggregated_data['Disability_Complexity'] == selected_complexity)
+            ]
+
+            original_person_count = subset['Unique_Person_Count'].iloc[0] if not subset.empty else 0 # Handle empty subset
+            new_person_count = st.number_input(
+                f"New Number of People for {selected_county} - {selected_service} - {selected_complexity}",
+                min_value=0, value=original_person_count, step=1
+            )
+
+            submitted = st.form_submit_button("Update Costs")
+
+            if submitted: # Check if the form was submitted at all
+                if not subset.empty and new_person_count != original_person_count:
+                    changes[(selected_county, selected_service, selected_complexity)] = new_person_count
+                elif not subset.empty and new_person_count == original_person_count:
+                    st.write("No change in the number of people.")
+                elif subset.empty:
+                    st.write(f"No data found for {selected_county} - {selected_service} - {selected_complexity} in the current filter.")
+
+
+        if changes: # Check if the changes dictionary is not empty
+            for (county, service, complexity), new_count in changes.items():
+                subset_index = aggregated_data[
+                    (aggregated_data['County'] == county) &
+                    (aggregated_data['Service'] == service) &
+                    (aggregated_data['Disability_Complexity'] == complexity)
+                ].index
+
+                original_data = aggregated_data.loc[subset_index].iloc[0]
+
+                aggregated_data.loc[subset_index, 'Estimated_Total_Cost'] = original_data['Average_Cost'] * new_count
+                aggregated_data.loc[subset_index, 'Estimated_Min_Cost'] = original_data['Min_Cost'] * new_count
+                aggregated_data.loc[subset_index, 'Estimated_Max_Cost'] = original_data['Max_Cost'] * new_count
+
+            # Update session state *after* applying changes
+            st.session_state.aggregated_data = aggregated_data  # This
+
+        st.subheader("Aggregated Cost Data (with Estimates)")
+        new_aggregated_data = aggregated_data.drop(columns=["Total_Cost", "Average_Cost", "Median_Cost", "Min_Cost", "Max_Cost", "Unique_Person_Count"],axis=1)
+        st.dataframe(new_aggregated_data)
+        
+        total_cost = new_aggregated_data['Estimated_Total_Cost'].sum()
+        st.write(f"Total Estimated Cost: €{total_cost:,.2f}")
+        
+        # plot by Service and Complexity
+        fig = px.bar(
+            new_aggregated_data,
+            x="Service",
+            y="Estimated_Total_Cost",
+            color="Disability_Complexity",
+            title="Estimated Total Cost by Service and Disability Complexity",
+            width=800,
+            height=600
+        )
+        #show plot
+        st.plotly_chart(fig)
+
+     
+        
+      
+        
+    return aggregated_data
+
 
