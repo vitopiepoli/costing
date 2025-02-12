@@ -260,73 +260,59 @@ def tab5_content(df):
         # --- Cost Estimation Section ---
         st.subheader("Cost Estimation")
 
-        # Get unique combinations for dropdowns
-        county_options = df['County'].unique().tolist()
-        service_options = df['Service'].unique().tolist()
-        complexity_options = df['Disability_Complexity'].unique().tolist()
-
-        # Initialize new columns with original values
-        aggregated_data['Estimated_Total_Cost'] = aggregated_data['Total_Cost']
-        aggregated_data['Estimated_Min_Cost'] = aggregated_data['Min_Cost']
-        aggregated_data['Estimated_Max_Cost'] = aggregated_data['Max_Cost']
-
-        # Create a dictionary to store changes:
-        changes = {}
-
-        # Use st.form to group the input elements
-        with st.form("cost_estimation_form"):
-
-            selected_county = st.selectbox("Select County", county_options)
-            selected_service = st.selectbox("Select Service", service_options)
-            selected_complexity = st.selectbox("Select Disability Complexity", complexity_options)
-
-            # Filter aggregated data for the selected combination
-            subset = aggregated_data[
-                (aggregated_data['County'] == selected_county) &
-                (aggregated_data['Service'] == selected_service) &
-                (aggregated_data['Disability_Complexity'] == selected_complexity)
-            ]
-
-            original_person_count = subset['Unique_Person_Count'].iloc[0] if not subset.empty else 0 # Handle empty subset
-            new_person_count = st.number_input(
-                f"New Number of People for {selected_county} - {selected_service} - {selected_complexity}",
-                min_value=0, value=original_person_count, step=1
-            )
-
-            submitted = st.form_submit_button("Update Costs")
-
-            if submitted: # Check if the form was submitted at all
-                if not subset.empty and new_person_count != original_person_count:
-                    changes[(selected_county, selected_service, selected_complexity)] = new_person_count
-                elif not subset.empty and new_person_count == original_person_count:
-                    st.write("No change in the number of people.")
-                elif subset.empty:
-                    st.write(f"No data found for {selected_county} - {selected_service} - {selected_complexity} in the current filter.")
-
-
-        if changes: # Check if the changes dictionary is not empty
-            for (county, service, complexity), new_count in changes.items():
-                subset_index = aggregated_data[
-                    (aggregated_data['County'] == county) &
-                    (aggregated_data['Service'] == service) &
-                    (aggregated_data['Disability_Complexity'] == complexity)
-                ].index
-
-                original_data = aggregated_data.loc[subset_index].iloc[0]
-
-                aggregated_data.loc[subset_index, 'Estimated_Total_Cost'] = original_data['Average_Cost'] * new_count
-                aggregated_data.loc[subset_index, 'Estimated_Min_Cost'] = original_data['Min_Cost'] * new_count
-                aggregated_data.loc[subset_index, 'Estimated_Max_Cost'] = original_data['Max_Cost'] * new_count
-
-            # Update session state *after* applying changes
-            st.session_state.aggregated_data = aggregated_data  # This
-
-        st.subheader("Aggregated Cost Data (with Estimates)")
-        new_aggregated_data = aggregated_data.drop(columns=["Total_Cost", "Average_Cost", "Median_Cost", "Min_Cost", "Max_Cost", "Unique_Person_Count"],axis=1)
-        st.dataframe(new_aggregated_data)
-        
-        total_cost = new_aggregated_data['Estimated_Total_Cost'].sum()
-        st.write(f"Total Estimated Cost: €{total_cost:,.2f}")
+    # Get unique combinations for dropdowns (do this once, outside the form)
+    county_options = df['County'].unique().tolist()
+    service_options = df['Service'].unique().tolist()
+    complexity_options = df['Disability_Complexity'].unique().tolist()
+    
+    # Initialize estimated cost columns (do this once, preferably when the data is loaded)
+    if 'aggregated_data' not in st.session_state:
+        st.session_state.aggregated_data = aggregated_data.copy()  # Create a copy to avoid SettingWithCopyWarning
+        st.session_state.aggregated_data['Estimated_Total_Cost'] = st.session_state.aggregated_data['Total_Cost']
+        st.session_state.aggregated_data['Estimated_Min_Cost'] = st.session_state.aggregated_data['Min_Cost']
+        st.session_state.aggregated_data['Estimated_Max_Cost'] = st.session_state.aggregated_data['Max_Cost']
+    
+    
+    # Use st.form to group the input elements
+    with st.form("cost_estimation_form"):
+        selected_county = st.selectbox("Select County", county_options)
+        selected_service = st.selectbox("Select Service", service_options)
+        selected_complexity = st.selectbox("Select Disability Complexity", complexity_options)
+    
+        # Filter aggregated data for the selected combination
+        subset = st.session_state.aggregated_data[
+            (st.session_state.aggregated_data['County'] == selected_county) &
+            (st.session_state.aggregated_data['Service'] == selected_service) &
+            (st.session_state.aggregated_data['Disability_Complexity'] == selected_complexity)
+        ]
+    
+        original_person_count = subset['Unique_Person_Count'].iloc[0] if not subset.empty else 0  # Handle empty subset
+        new_person_count = st.number_input(
+            f"New Number of People for {selected_county} - {selected_service} - {selected_complexity}",
+            min_value=0, value=original_person_count, step=1
+        )
+    
+        submitted = st.form_submit_button("Update Costs")
+    
+    if submitted:
+        if not subset.empty and new_person_count != original_person_count:
+            subset_index = subset.index  # Get the index directly from the subset
+            original_data = subset.iloc[0] # Access data from the already filtered subset
+    
+            st.session_state.aggregated_data.loc[subset_index, 'Estimated_Total_Cost'] = original_data['Average_Cost'] * new_person_count
+            st.session_state.aggregated_data.loc[subset_index, 'Estimated_Min_Cost'] = original_data['Min_Cost'] * new_person_count
+            st.session_state.aggregated_data.loc[subset_index, 'Estimated_Max_Cost'] = original_data['Max_Cost'] * new_person_count
+            st.experimental_rerun()  # Rerun to update the displayed dataframe immediately
+    
+        elif not subset.empty and new_person_count == original_person_count:
+            st.write("No change in the number of people.")
+        elif subset.empty:
+            st.write(f"No data found for {selected_county} - {selected_service} - {selected_complexity} in the current filter.")
+    
+    
+    st.subheader("Aggregated Cost Data (with Estimates)")
+    new_aggregated_data = st.session_state.aggregated_data.drop(columns=["Total_Cost", "Average_Cost", "Median_Cost", "Min_Cost", "Max_Cost", "Unique_Person_Count"], axis=1)
+    st.dataframe(new_aggregated_data)
         
         # plot by Service and Complexity
         fig = px.bar(
